@@ -105,6 +105,72 @@ def remove_self_induced(w, X, Y, x0, y0, gamma):
     W = w - generate_vortex(X, Y, x0, y0, gamma)
     return W
 
+def circulate(u,v):
+    """
+    Compute the circulation of a velocity field around all the cells of the grid.
+
+    Uses an octagonal path around each cell, so boundaries are not included.
+
+    Parameters
+    ----------
+    u : 2D array of floats
+        x component of the velocity field.
+    v : 2D array of floats
+        y component of the velocity field.
+
+    Returns
+    -------
+    C : 2D array of floats
+        Circulation around each (inner) cell of the grid.
+    """
+    N, M = u.shape
+    C = np.zeros((N-3, M-3), dtype=np.complex128)
+    rows, cols = np.arange(0,N-3), np.arange(0,M-3)
+    rows, cols = np.meshgrid(rows, cols)
+    for i,j,dz in zip(
+        [2,1,0,0,1,2,3,3],
+        [0,0,1,2,3,3,2,1],
+        [-1-3j,1-3j,3-1j,3+1j,1+3j,-1+3j,-3+1j,-3-1j]
+    ):
+        C += (u[cols+i,rows+j] - 1j*v[cols+i,rows+j])*dz
+    return C / 2.6870914480773047 # because reasons
+
+def locate_vortices(C, threshold=0.1):
+    """
+    Locate the vortices in a circulation field.
+
+    Parameters
+    ----------
+    C : 2D array of floats
+        Circulation around each (inner) cell of the grid.
+    threshold : float
+        Threshold for the circulation. Default is 0.1.
+
+    Returns
+    -------
+    x0 : 1D array of floats
+        x coordinates of the vortex centers.
+    y0 : 1D array of floats
+        y coordinates of the vortex centers.
+    gamma : 1D array of floats
+        Circulation around each vortex.
+    """
+    N, M = C.shape[0], C.shape[1]
+    C_max = np.zeros((N+2, M+2), dtype=bool)
+    C_magnitude = np.zeros((N+2, M+2))
+    C_magnitude[1:-1,1:-1] = np.abs(C)
+    x_pot, y_pot = np.where(C_magnitude > threshold)
+    for x, y in zip(x_pot, y_pot):
+        C_max[x,y] = (
+            C_magnitude[x,y] > C_magnitude[x-1,y] 
+            and C_magnitude[x,y] > C_magnitude[x,y-1] 
+            and C_magnitude[x,y] > C_magnitude[x,y+1] 
+            and C_magnitude[x,y] > C_magnitude[x+1,y]
+    )
+    x0, y0 = np.where(C_max == True)
+    gamma = C[x0-1,y0-1].real
+    return x0-1, y0-1, gamma, C_max[::-1]
+
 
 ################################################################################
 ############################## PLOTTING TOOLS ##################################
